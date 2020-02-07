@@ -1,0 +1,172 @@
+---
+title: "hwk1"
+author: "Amanda Elert"
+date: "2/7/2020"
+output: github_document
+---
+
+# Bridges - Homework 1
+```{r}
+# Downloading necessary packages
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(tidyverse)
+```
+
+### Downloading the Data
+After the download is complete, I run several checks to make sure it loaded correctly.
+```{r}
+# Need to open the zip file
+dt <- fread("curl https://www.fhwa.dot.gov/bridge/nbi/2018hwybronefiledel.zip | funzip")
+
+# Comparing my table in R to the CSV file I downloaded onto to my local computer
+head(dt) # Matches the first 6 rows of the Excel file
+tail(dt) # Matches the last 6 rows of the Excel file
+dim(dt) # Matches the number of rows and columns that I have when I open the file in Excel
+str(dt$CAT23)
+```
+
+### Creating a Subset
+I chose several columns that I wanted to work with
+```{r}
+# bridge ID, year, fips codes, condition ratings
+dt_small <- select(dt, STRUCTURE_NUMBER_008, YEAR_BUILT_027, STATE_CODE_001, COUNTY_CODE_003, CAT10, CAT23, CAT29) %>% 
+  rename(bridge_id = STRUCTURE_NUMBER_008, year_built = YEAR_BUILT_027, state = STATE_CODE_001, county = COUNTY_CODE_003, bridge_cond = CAT10, overall_bridge_cond = CAT23, deck_cond = CAT29)
+
+str(dt_small)
+head(dt_small)
+```
+
+### Exploratory Data Analysis
+In order to ask a good question, I want to know what my data contains. 
+```{r}
+# How many bridges were built per year?
+dt_small %>% 
+  group_by(year_built) %>%
+  summarise(count = n()) %>% 
+  ggplot() + geom_line(aes(x = year_built, y = count))
+
+# How many bridges were built in each state?
+dt_small %>% 
+  group_by(state) %>%
+  summarise(count = n()) %>% 
+  ggplot(aes(x = state, y = count)) + geom_bar(stat="identity")
+
+# What states had the most bridges built?
+dt_small %>% 
+  group_by(state) %>%
+  summarise(count = n()) %>% 
+  filter(count >= 20000) %>%
+  arrange(desc(count))
+
+# What values are in bridge_cond, overall_bridge_cond, and deck_cond?
+dt_small %>%
+  select(bridge_cond) %>% 
+  group_by(bridge_cond) %>% 
+  summarise(n = n())
+# Meanings derived from this site: https://www.fhwa.dot.gov/tpm/pubs/PM2FAQs.pdf
+# >= 7 means "Good"
+# 4 < x < 7 means "Fair"
+# <= 4 means "Poor"
+# N might mean NA? Not specified in the documentation
+
+dt_small %>%
+  select(overall_bridge_cond) %>% 
+  group_by(overall_bridge_cond) %>% 
+  summarise(n = n())
+
+dt_small %>%
+  select(deck_cond) %>% 
+  group_by(deck_cond) %>% 
+  summarise(n = n())
+
+deck_range <- dt_small %>%
+  select(deck_cond) %>% 
+  arrange(desc(deck_cond))
+head(deck_range) # 486680.4
+tail(deck_range) # 1.92
+
+# Checking if the bridge_cond grade is based on the overall_bridge_cond score.
+dt_small %>%
+  select(bridge_cond, overall_bridge_cond) %>% 
+  filter(bridge_cond == 'F') %>% 
+  group_by(overall_bridge_cond) %>% 
+  summarise(n = n())
+
+dt_small %>%
+  select(bridge_cond, overall_bridge_cond) %>% 
+  filter(bridge_cond == 'G') %>% 
+  group_by(overall_bridge_cond) %>% 
+  summarise(n = n())
+
+dt_small %>%
+  select(bridge_cond, overall_bridge_cond) %>% 
+  filter(bridge_cond == 'P') %>% 
+  group_by(overall_bridge_cond) %>% 
+  summarise(n = n())
+# My theory holds.
+```
+
+### Asking the Question
+Now I want to see if the more recent bridges have better condition ratings than the older bridges. My hypothesis is that as technology/science improve over the years, the condition ratings of the bridges will also improve. 
+</br>
+</br>
+First, I ran into some brief clean-up work.
+```{r}
+# overall_bridge_cond is a character value
+str(dt_small) 
+dt_small <- dt_small %>% filter(bridge_cond != 'N') # Taking this out bc it corresponds with a "N" value for overall_bridge_cond
+dt_small$overall_bridge_cond <- parse_integer(dt_small$overall_bridge_cond) # changing to an integer so I can analyze it
+str(dt_small)
+dim(dt_small)
+
+# bridges with the same id code?
+dt_small %>% 
+  select(bridge_id, year_built, overall_bridge_cond) %>% 
+  group_by(bridge_id) %>% 
+  summarise(n = n())
+
+dt_small %>% 
+  filter(bridge_id == '000000000000010')
+#  In this example, there are duplicate bridge_id numbers, but they are not duplicate rows
+
+# Trying to remove duplicates below
+dt_small %>% 
+  group_by(bridge_id, year_built, state, bridge_cond, overall_bridge_cond, deck_cond) %>% 
+  summarise(n = n())
+# No duplicate rows. Will continue.
+```
+</br>
+Now I can get to answering my question.
+```{r}
+dt_small %>% 
+  select(bridge_id, year_built, overall_bridge_cond) %>%
+  group_by(year_built) %>% 
+  summarise(avg_cond = mean(overall_bridge_cond, na.rm = TRUE)) %>% 
+  ggplot(aes(x = year_built, y = avg_cond)) + 
+  geom_point() + 
+  geom_hline(yintercept = 7, linetype="dashed", color = "green") +
+  geom_hline(yintercept = 4, linetype="dashed", color = "red") +
+  ggtitle("Average Bridge Condition per Year") +
+  xlab("Year Bridge Was Built") + 
+  ylab("Average Overall Bridge Condition Score")
+# My hypothesis is correct.
+
+# Let's zoom in on Wisconsin.
+dt_small %>% 
+  filter(state == 55) %>% 
+  select(bridge_id, year_built, overall_bridge_cond) %>%
+  group_by(year_built) %>% 
+  summarise(avg_cond = mean(overall_bridge_cond, na.rm = TRUE)) %>% 
+  ggplot(aes(x = year_built, y = avg_cond)) + 
+  geom_point() + geom_hline(yintercept = 7, linetype="dashed", color = "green") +
+  geom_hline(yintercept = 4, linetype="dashed", color = "red") +
+  ggtitle("Average Bridge Condition per Year in Wisconsin") +
+  xlab("Year Bridge Was Built") + 
+  ylab("Average Overall Bridge Condition Score")
+```
+
+### Summarizing My Findings
+After looking through all 137 columns, I chose columns that I understood and saw value in studying. I wanted to analyze the condition of these bridges over the years to see how their overall condition has changed. From 1760 to 2000, average condition rating per year was categorized as "Fair," except for about 10 years. Since the year 2000, the average rating has skyrocketed to an average of 8.5 in 2019 across all bridges. This tells me the quality of bridges has steadily increased since around 1915. 
+
