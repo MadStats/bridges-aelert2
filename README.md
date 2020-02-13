@@ -366,15 +366,15 @@ rating has skyrocketed to an average of 8.5 in 2019 across all bridges.
 This tells me the quality of bridges has steadily increased since around
 1915.
 
-### Adding the BLS Unemployment Data
+Adding the BLS Unemployment Data
+================================
 
     # https://www.r-bloggers.com/using-blscraper-to-map-county-unemployment-data/
     library(blscrapeR)
     bls <- get_bls_county()
     # head(bls)
 
-Plot for all states
-===================
+### Plot for all states
 
     # Need state and county codes to be character to join on those variables
     bridge <- dt_small
@@ -400,19 +400,19 @@ Plot for all states
       group_by(state, labor_force) %>% 
       summarise(avg_cond = mean(overall_bridge_cond, na.rm = TRUE)) %>% 
       ggplot(aes(x = labor_force, y = avg_cond)) + 
-      geom_point(aes(colour = state, alpha = .2)) +
+      geom_point(aes(alpha = .2)) +
       xlab("Size of Labor Force per State") + 
       ylab("Average Bridge Condition (0-9)") +
       ggtitle("Labor Force versus Average Bridge Condition Per State") +
       geom_hline(yintercept = 7, linetype="dashed", color = "green") +
-      geom_hline(yintercept = 4, linetype="dashed", color = "red")
+      geom_hline(yintercept = 4, linetype="dashed", color = "red") +
+      scale_x_continuous(trans = 'log10')
 
     ## Warning: Removed 53 rows containing missing values (geom_point).
 
 ![](README_files/figure-markdown_strict/unnamed-chunk-8-1.png)
 
-Plot for Wisconsin
-==================
+### Plot for Wisconsin
 
     bridge %>% 
       select(bridge_id, year_built, state, county, overall_bridge_cond) %>%
@@ -423,12 +423,13 @@ Plot for Wisconsin
                 count = n()) %>% 
       filter(state == "55") %>% 
       ggplot(aes(x = labor_force, y = avg_cond)) + 
-      geom_point(aes(colour = county, size = count)) +
+      geom_point(aes(size = count, alpha = .2)) +
       xlab("Size of Labor force per County") +
       ylab("Average Bridge Condition (0-9)") +
-      ggtitle("Labor Force versus Average Bridge Condition Per County") +
+      ggtitle("Labor Force versus Average Bridge Condition Per County in Wisconsin") +
       geom_hline(yintercept = 7, linetype="dashed", color = "green") +
-      geom_hline(yintercept = 4, linetype="dashed", color = "red")
+      geom_hline(yintercept = 4, linetype="dashed", color = "red") +
+      scale_x_continuous(trans = 'log10')
 
     ## Warning: Removed 51 rows containing missing values (geom_point).
 
